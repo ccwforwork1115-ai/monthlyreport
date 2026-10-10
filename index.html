@@ -72,11 +72,11 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .sec-hdr{padding:11px 16px;font-weight:500;font-size:13px;background:#F8F7F4;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
 .sec-num{font-size:11px;font-weight:700;background:var(--accent);color:#fff;border-radius:4px;padding:1px 7px;letter-spacing:.03em;flex-shrink:0}
 .sec-hdr .chip{margin-left:auto;font-size:11px;padding:2px 9px}
-.row{padding:11px 16px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
+.row{padding:11px 16px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start}
 .row:last-child{border-bottom:none}
 .row-name{font-size:13px;font-weight:500;margin-bottom:3px}
 .row-det{font-size:12px;color:var(--muted);line-height:1.8}
-.val{font-family:var(--mono);font-size:11px;background:#EEECE8;padding:1px 5px;border-radius:3px;color:var(--text);white-space:nowrap;display:inline-block}
+.val{font-family:var(--mono);font-size:11px;background:#EEECE8;padding:1px 5px;border-radius:3px;color:var(--text);white-space:normal;overflow-wrap:anywhere;max-width:100%;display:inline-block}
 .val.hi{background:var(--warnbg);color:var(--warn)}  /* 異常值高亮 */
 .bdg{padding:3px 10px;border-radius:6px;font-size:12px;font-weight:500;white-space:nowrap}
 .bp{background:var(--passbg);color:var(--pass)}
@@ -101,6 +101,18 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .rawbox{display:none;margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;font-family:var(--mono);font-size:11px;color:var(--muted);white-space:pre-wrap;max-height:280px;overflow-y:auto;line-height:1.7}
 .rawbox.on{display:block}
 .footer{text-align:center;margin-top:40px;padding-bottom:28px;font-size:11px;color:var(--faint)}
+/* 長公式可在內容欄換行，狀態標籤保持在卡片內。 */
+.row > div,.manual-row > div:first-child{min-width:0}
+.row-name,.row-det,.manual-name,.manual-hint{overflow-wrap:anywhere}
+.row > .bdg,.manual-row > .bdg{flex-shrink:0;justify-self:end}
+.sec-hdr{flex-wrap:wrap}
+.sec-hdr .chip{flex-shrink:0;white-space:nowrap}
+@media(max-width:480px){
+  .row{grid-template-columns:minmax(0,1fr)}
+  .row > .bdg{grid-row:1;justify-self:start}
+  .manual-row{flex-wrap:wrap}
+  .manual-row > div:first-child{flex-basis:100%}
+}
 </style>
 </head>
 <body>
@@ -270,7 +282,7 @@ function parseData(pages){
   let p1='', p2='', p4='', p5='', p6='', p910='', p1112='', p13='', p14='';
   {
     const nums = Object.keys(pages).map(Number).sort((a,b)=>a-b);
-    const balPages=[], capPages=[], fixPages=[], costPages=[];
+    const balPages=[], capPages=[], fixPages=[], costPages=[], incomePages=[];
 
     for(const n of nums){
       const t = pages[n]||'';
@@ -278,8 +290,9 @@ function parseData(pages){
 
       if(!p1 && t.includes('期初基金餘額') && t.includes('期末基金餘額') && !t.includes('預算執行')){
         p1=t;
-      } else if(!p4 && t.includes('收入支出表') && t.includes('人事支出') && t.includes('業務支出')){
-        p4=t;
+      } else if(t.includes('收入支出表')){
+        // 收入支出表可跨頁，期初／期末淨資產與調整數可能位於續頁。
+        incomePages.push(t);
       } else if(!p5 && t.includes('主要業務計畫執行明細表')){
         p5=t;
       } else if(t.includes('資本資產明細表') && t.includes('取得成本')){
@@ -297,6 +310,7 @@ function parseData(pages){
       }
     }
 
+    p4    = incomePages.join(' ');
     p2    = balPages.join(' ');
     p6    = capPages.join(' ');
     p910  = fixPages.join(' ');
@@ -604,7 +618,8 @@ function p1AccumActual(label){
   })();
   // 費用表購建固定資產（第51目）執行數
   const 費用表購建固定執行 = (()=>{
-    const m = p1112.match(/51\s+購建固定資產\s+([\d,]+)\s+([\d,]+)/);
+    // PDF 文字項目可能在科目名稱中插入空白；保留科目碼與數字欄位界線。
+    const m = p1112.match(/(?:^|\s)51\s+購\s*建\s*固\s*定\s*資\s*產\s+([\d,]+)\s+([\d,]+)/);
     return m ? cn(m[2]) : null;
   })();
 
@@ -1107,3 +1122,4 @@ async function run(){
 </script>
 </body>
 </html>
+
