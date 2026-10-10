@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>月報自動勾稽工具</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root{
+  --bg:#F5F3EE;--surface:#FDFCFA;--border:#DDD9D0;--border2:#B8B3A8;
+  --text:#1A1916;--muted:#6B6760;--faint:#9C9890;
+  --accent:#1A3A2A;--accent2:#2D5C42;
+  --pass:#1A7040;--passbg:#E8F5EE;
+  --fail:#8B2020;--failbg:#FBEDED;
+  --warn:#7A5A10;--warnbg:#FDF4DC;
+  --info:#1A4A7A;--infobg:#E8F0FA;
+  --mono:'IBM Plex Mono',monospace;--sans:'Noto Sans TC',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.6}
+.hdr{background:var(--accent);color:#fff;padding:18px 28px;display:flex;align-items:center;gap:14px}
+.hdr-icon{width:38px;height:38px;border:1.5px solid rgba(255,255,255,.3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.hdr h1{font-size:16px;font-weight:500}
+.hdr p{font-size:11px;opacity:.55;margin-top:2px}
+.main{max-width:860px;margin:0 auto;padding:28px 20px}
+
+/* 零用金設定 */
+.settings-bar{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.settings-bar label{font-size:13px;font-weight:500;white-space:nowrap}
+.settings-bar input{font-family:var(--mono);font-size:13px;border:1px solid var(--border2);border-radius:6px;padding:5px 10px;width:130px;background:var(--bg);color:var(--text)}
+.settings-bar input:focus{outline:2px solid var(--accent2);border-color:transparent}
+.settings-bar span{font-size:12px;color:var(--muted)}
+
+/* upload */
+.dropzone{background:var(--surface);border:1.5px dashed var(--border2);border-radius:12px;padding:36px 28px;text-align:center;cursor:pointer;transition:.2s;position:relative}
+.dropzone:hover,.dropzone.over{border-color:var(--accent2);background:#F0F5F2}
+.dropzone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.dropzone h2{font-size:15px;font-weight:500;margin:10px 0 6px}
+.dropzone p{font-size:12px;color:var(--muted)}
+.fbar{display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;align-items:center;gap:10px;margin-top:10px}
+.fbar.on{display:flex}
+.fbar button{margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:17px;padding:2px 6px}
+.fbar button:hover{color:var(--fail)}
+.runbtn{display:block;width:100%;margin-top:14px;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:var(--sans);font-size:15px;font-weight:500;cursor:pointer;transition:.2s}
+.runbtn:hover:not(:disabled){background:var(--accent2)}
+.runbtn:disabled{opacity:.4;cursor:not-allowed}
+.prog{display:none;margin-top:18px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px}
+.prog.on{display:block}
+.prog-lbl{font-size:12px;color:var(--muted);margin-bottom:8px}
+.prog-track{height:3px;background:var(--border);border-radius:3px;overflow:hidden}
+.prog-fill{height:100%;background:var(--accent2);border-radius:3px;width:0%;transition:.3s}
+.prog-log{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--faint);line-height:1.7}
+.prog-log div:last-child{color:var(--text)}
+.errmsg{display:none;margin-top:14px;padding:14px 18px;background:var(--failbg);border:1px solid #E8BFBF;border-radius:10px;font-size:13px;color:var(--fail);line-height:1.6;white-space:pre-wrap}
+.errmsg.on{display:block}
+
+/* results */
+.res{display:none;margin-top:24px}
+.res.on{display:block}
+.res-hdr{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+.res-title{font-size:17px;font-weight:500}
+.res-meta{font-size:11px;color:var(--muted)}
+.res-period{font-size:13px;color:var(--muted);margin-bottom:14px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.chip{padding:5px 12px;border-radius:16px;font-size:12px;font-weight:500}
+.cp{background:var(--passbg);color:var(--pass)}
+.cf{background:var(--failbg);color:var(--fail)}
+.cw{background:var(--warnbg);color:var(--warn)}
+.ci{background:var(--infobg);color:var(--info)}
+.cs{background:#EDECE9;color:var(--faint)}
+.sec{margin-bottom:14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.sec-hdr{padding:11px 16px;font-weight:500;font-size:13px;background:#F8F7F4;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.sec-num{font-size:11px;font-weight:700;background:var(--accent);color:#fff;border-radius:4px;padding:1px 7px;letter-spacing:.03em;flex-shrink:0}
+.sec-hdr .chip{margin-left:auto;font-size:11px;padding:2px 9px}
+.row{padding:11px 16px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start}
+.row:last-child{border-bottom:none}
+.row-name{font-size:13px;font-weight:500;margin-bottom:3px}
+.row-det{font-size:12px;color:var(--muted);line-height:1.8}
+.val{font-family:var(--mono);font-size:11px;background:#EEECE8;padding:1px 5px;border-radius:3px;color:var(--text);white-space:normal;overflow-wrap:anywhere;max-width:100%;display:inline-block}
+.val.hi{background:var(--warnbg);color:var(--warn)}  /* 異常值高亮 */
+.bdg{padding:3px 10px;border-radius:6px;font-size:12px;font-weight:500;white-space:nowrap}
+.bp{background:var(--passbg);color:var(--pass)}
+.bf{background:var(--failbg);color:var(--fail)}
+.bw{background:var(--warnbg);color:var(--warn)}
+.bi{background:var(--infobg);color:var(--info)}
+.bs{background:#EDECE9;color:var(--faint)}
+.diff{font-family:var(--mono);font-size:12px;color:var(--fail);margin-top:3px}
+.note{font-size:11px;color:var(--warn);margin-top:2px;line-height:1.5}
+.note-pass{font-size:11px;color:var(--pass);margin-top:2px}
+.manual-row{padding:11px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.manual-row:last-child{border-bottom:none}
+.manual-name{font-size:13px;font-weight:500;margin-bottom:3px}
+.manual-hint{font-size:12px;color:var(--muted);line-height:1.6}
+.manual-hint b{color:var(--warn)}
+.manual-hint .val{background:#EEECE8;font-family:var(--mono);font-size:11px;padding:1px 5px;border-radius:3px;color:var(--text)}
+.manual-hint .val.hi{background:var(--failbg);color:var(--fail)}
+.chkwrap{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-top:2px}
+.chkbox{width:17px;height:17px;cursor:pointer;accent-color:var(--accent)}
+.raw-btn{margin-top:16px;text-align:center}
+.raw-btn button{background:none;border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:12px;color:var(--muted);cursor:pointer;font-family:var(--sans)}
+.rawbox{display:none;margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;font-family:var(--mono);font-size:11px;color:var(--muted);white-space:pre-wrap;max-height:280px;overflow-y:auto;line-height:1.7}
+.rawbox.on{display:block}
+.footer{text-align:center;margin-top:40px;padding-bottom:28px;font-size:11px;color:var(--faint)}
+/* 長公式可在內容欄換行，狀態標籤保持在卡片內。 */
+.row > div,.manual-row > div:first-child{min-width:0}
+.row-name,.row-det,.manual-name,.manual-hint{overflow-wrap:anywhere}
+.row > .bdg,.manual-row > .bdg{flex-shrink:0;justify-self:end}
+.sec-hdr{flex-wrap:wrap}
+.sec-hdr .chip{flex-shrink:0;white-space:nowrap}
+@media(max-width:480px){
+  .row{grid-template-columns:minmax(0,1fr)}
+  .row > .bdg{grid-row:1;justify-self:start}
+  .manual-row{flex-wrap:wrap}
+  .manual-row > div:first-child{flex-basis:100%}
+}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="hdr-icon">📋</div>
+  <div>
+    <h1>月報自動勾稽工具</h1>
+    <p>嘉義縣地方教育發展基金 ─ 月報表間數字自動比對（完全本地處理）</p>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- 零用金額度設定 -->
+  <div class="settings-bar">
+    <label>⚙ 零用金額度設定：</label>
+    <input type="number" id="pettyCash" value="40000" min="0" step="1000">
+    <span>元（縣庫存款 + 零用金額度 應等於期末基金餘額，每年可更新）</span>
+  </div>
+
+  <div class="dropzone" id="dz">
+    <input type="file" id="fi" accept="application/pdf">
+    <div style="font-size:32px">📄</div>
+    <h2>上傳本月月報 PDF</h2>
+    <p>點擊選取或拖曳 PDF 至此處<br>支援系統直接產生之合併月報 PDF</p>
+  </div>
+  <div class="fbar" id="fb">
+    <span style="font-size:20px">📄</span>
+    <div>
+      <div style="font-weight:500;font-size:13px" id="fn"></div>
+      <div style="font-size:11px;color:var(--muted)" id="fs"></div>
+    </div>
+    <button id="fr">✕</button>
+  </div>
+  <button class="runbtn" id="rb" disabled>開始勾稽檢核</button>
+
+  <div class="prog" id="pg">
+    <div class="prog-lbl" id="pl">讀取中…</div>
+    <div class="prog-track"><div class="prog-fill" id="pf"></div></div>
+    <div class="prog-log" id="plog"></div>
+  </div>
+  <div class="errmsg" id="em"></div>
+
+  <div class="res" id="res">
+    <div class="res-hdr">
+      <div class="res-title">勾稽結果</div>
+      <div class="res-meta" id="rm"></div>
+    </div>
+    <div class="res-period" id="rp"></div>
+    <div class="chips" id="ch"></div>
+    <div id="rc"></div>
+    <div class="raw-btn">
+      <button onclick="document.getElementById('rw').classList.toggle('on')">顯示 PDF 擷取原始數據 ▾</button>
+    </div>
+    <div class="rawbox" id="rw"></div>
+  </div>
+
+  <div class="footer">
+  所有數據僅在您的瀏覽器本地處理，不會上傳至任何伺服器<br>
+  <span style="opacity: 0.7; margin-top: 4px; display: inline-block;">Tool Developed by ccw</span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let file=null;
+const $=id=>document.getElementById(id);
+const dz=$('dz'),fi=$('fi'),fb=$('fb'),fn=$('fn'),fs=$('fs'),fr=$('fr'),rb=$('rb');
+const pg=$('pg'),pl=$('pl'),pf=$('pf'),plog=$('plog'),em=$('em');
+const res=$('res'),ch=$('ch'),rc=$('rc'),rm=$('rm'),rp=$('rp'),rw=$('rw');
+
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');const f=e.dataTransfer.files[0];if(f&&f.type==='application/pdf')setF(f)});
+fi.addEventListener('change',()=>{if(fi.files[0])setF(fi.files[0])});
+fr.addEventListener('click',clearF);
+rb.addEventListener('click',run);
+
+function setF(f){file=f;fn.textContent=f.name;fs.textContent=(f.size/1024).toFixed(0)+' KB';fb.classList.add('on');rb.disabled=false;rst()}
+function clearF(){file=null;fi.value='';fb.classList.remove('on');rb.disabled=true;rst()}
+function rst(){pg.classList.remove('on');res.classList.remove('on');em.classList.remove('on');plog.innerHTML='';pf.style.width='0%'}
+function lg(m){const d=document.createElement('div');d.textContent='› '+m;plog.appendChild(d);plog.scrollTop=9999}
+function sp(p,l){pf.style.width=p+'%';if(l)pl.textContent=l}
+
+// ── PDF 文字擷取 ──────────────────────────────────────────────
+async function extractPages(buf){
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const out={};
+  for(let i=1;i<=pdf.numPages;i++){
+    const page=await pdf.getPage(i);
+    const tc=await page.getTextContent();
+    const items=tc.items.slice().sort((a,b)=>{
+      const dy=Math.round(b.transform[5])-Math.round(a.transform[5]);
+      return dy!==0?dy:a.transform[4]-b.transform[4];
+    });
+    out[i]=items.map(it=>it.str).join(' ');
+  }
+  return out;
+}
+
+// ── 數字工具 ──────────────────────────────────────────────────
+function cn(s){if(s==null)return null;const v=parseFloat(String(s).replace(/,/g,'').trim());return isNaN(v)?null:Math.round(v)}
+function fmt(v){if(v==null)return '—';return Number(v).toLocaleString('zh-TW')}
+function fm(text,...pats){
+  for(const p of pats){const m=text.match(p);if(m)for(let i=1;i<m.length;i++){const v=cn(m[i]);if(v!==null)return v}}
+  return null;
+}
+
+// ── 解析各表數字 ──────────────────────────────────────────────
+// 關鍵：pdf.js 把整頁文字以「按座標排序後用空白連接」輸出，
+// 與 pdfplumber 的逐行格式完全不同。許多表格中數字會出現在
+// 科目名稱之「前」（因為左欄座標較小先輸出）。本解析邏輯經
+// Node.js + pdf.js 實測驗證，與工具瀏覽器端執行結果一致。
+
+// 工具：取得 label 出現位置前連續的數字 token
+function tokensBefore(text, label, lookback){
+  lookback = lookback || 300;
+  const idx = text.lastIndexOf(label);  // 用 lastIndexOf 跳過標題中的同名字串
+  if(idx < 0) return [];
+  const before = text.substring(Math.max(0, idx-lookback), idx).trim();
+  const tokens = before.split(/\s+/);
+  const nums = [];
+  for(let i=tokens.length-1; i>=0; i--){
+    if(/^-?[\d,]+(\.\d+)?$/.test(tokens[i])){
+      nums.unshift(tokens[i]);
+    } else break;
+  }
+  return nums.map(cn).filter(v=>v!==null);
+}
+
+// ── 逐頁報表期間檢核（包含續頁及累計期間的截止年月） ──
+function readReportPeriod(text){
+  const t = String(text || '').normalize('NFKC').replace(/\s+/g, '');
+  const m = t.match(/中華民國(\d{2,4})年(\d{1,2})月(?:(\d{1,2})日)?(?:(?:至|到|[~～—–-])(?:中華民國)?(?:(\d{2,4})年)?(\d{1,2})月(?:(\d{1,2})日)?)?/);
+  if(!m) return null;
+  let year = Number(m[4] || m[1]);
+  const month = Number(m[5] || m[2]);
+  if(year >= 1912) year -= 1911;
+  if(year < 1 || month < 1 || month > 12) return null;
+  return {year, month, key:year*100+month, label:year+'年'+month+'月'};
+}
+function inspectReportPeriods(pages){
+  const names = ['固定資產建設改良擴充執行情形明細表','預算執行與會計收支對照表','主要業務計畫執行明細表','基金來源用途餘絀表','基金來源、用途及餘絀表','銀行存款-縣庫存款調節表','銀行存款調節表','資本資產明細表','長期負債明細表','各項費用彙計表','收入支出表','平衡表'];
+  const rows = Object.keys(pages).map(Number).sort((a,b)=>a-b).map(page=>{
+    const compact = String(pages[page] || '').normalize('NFKC').replace(/\s+/g, '');
+    const title = compact.includes('存款調節表') ? '銀行存款調節表' : (names.find(name=>compact.includes(name)) || '報表');
+    return {page, title, period:readReportPeriod(pages[page]), compact};
+  });
+  const reference = rows.find(r=>/基金來源.*用途.*餘絀表/.test(r.compact) && !r.compact.includes('預算執行與會計收支對照表'));
+  const expected = reference ? reference.period : null;
+  return {expected, referencePage:reference ? reference.page : null, rows};
+}
+function periodChecks(periods){
+  return {sec:'報表年月一致性檢核', items:periods.rows.map(r=>({
+    type:'period', name:'第 '+r.page+' 頁｜'+r.title+'：報表年月',
+    a:r.period ? r.period.key : null, b:periods.expected ? periods.expected.key : null,
+    actualLabel:r.period ? r.period.label : '未辨識到報表年月',
+    expectedLabel:periods.expected ? periods.expected.label : '基準表年月未辨識',
+    referencePage:periods.referencePage
+  }))};
+}
+
+function parseData(pages){
+  // 動態辨識頁面類型：不同學校平衡表頁數不同（2或3頁），
+  // 導致後續頁碼全部錯位。改以內容關鍵字分類，不依賴固定頁碼。
+  let p1='', p2='', p4='', p5='', p6='', p910='', p1112='', p13='', p14='';
+  {
+    const nums = Object.keys(pages).map(Number).sort((a,b)=>a-b);
+    const balPages=[], capPages=[], fixPages=[], costPages=[], incomePages=[];
+
+    for(const n of nums){
+      const t = pages[n]||'';
+      if(!t.trim()) continue;
+
+      if(!p1 && t.includes('期初基金餘額') && t.includes('期末基金餘額') && !t.includes('預算執行')){
+        p1=t;
+      } else if(t.includes('收入支出表')){
+        // 收入支出表可跨頁，期初／期末淨資產與調整數可能位於續頁。
+        incomePages.push(t);
+      } else if(!p5 && t.includes('主要業務計畫執行明細表')){
+        p5=t;
+      } else if(t.includes('資本資產明細表') && t.includes('取得成本')){
+        capPages.push(t);
+      } else if(t.includes('固定資產建設改良擴充執行情形明細表')){
+        fixPages.push(t);
+      } else if(t.includes('各項費用彙計表') && (t.includes('截至本月執行數') || t.includes('比較增減'))){
+        costPages.push(t);
+      } else if(!p13 && t.includes('預算執行與會計收支對照表') && t.includes('基金來源') && t.includes('調整數')){
+        p13=t;
+      } else if(!p14 && t.includes('平衡表帳面餘額') && t.includes('支付科對帳單')){
+        p14=t;
+      } else if(t.includes('平衡表') && (t.includes('流動資產') || t.includes('固定資產') || t.includes('累計折舊'))){
+        balPages.push(t);
+      }
+    }
+
+    p4    = incomePages.join(' ');
+    p2    = balPages.join(' ');
+    p6    = capPages.join(' ');
+    p910  = fixPages.join(' ');
+    p1112 = costPages.join(' ');
+  }
+
+  // ══ P1 基金來源用途餘絀表 ══════════════════════════════════
+  // pdf.js 輸出格式（數字在科目名之前）：
+  //   [法定預算] [本月實際] [本月預算] [本月差±] [本月%±] [累計實際] [累計預算] [累計差±] [累計%±] 科目名
+  //   完整 9 個 token；若本月差額=0 系統省略「本月差/本月%」變成 7 個 token。
+  // 期末基金餘額簡化版（5 個 token）：[本月實][累計實][本月預][累計預][累計%]
+  // 共通策略：「累計實際 = 倒數第 4 個 token」（後面固定是 累計預算/累計差/累計%）
+function escapeRegExp(s){
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function labelPattern(label){
+  return label.split('').map(escapeRegExp).join('\\s*');
+}
+
+function rowNumbersAfterLabel(label){
+  const regex = new RegExp(labelPattern(label), 'g');
+  const candidates = [];
+  for(const m of p1.matchAll(regex)){
+    const start = m.index + m[0].length;
+    const tail = p1.substring(start, start + 260);
+    const nextNonSpace = tail.match(/\S/);
+    if(nextNonSpace && /[\u4e00-\u9fff]/.test(nextNonSpace[0])){
+      continue; // 避免抓到「基金來源用途」或其他後接中文字的情況
+    }
+    const tokens = tail.trim().split(/\s+/);
+    const nums = [];
+    let started = false;
+    for(const t of tokens){
+      if(/^-?[\d,]+(\.\d+)?$/.test(t)){
+        nums.push(cn(t));
+        started = true;
+      } else if(started){
+        break;
+      }
+    }
+    if(nums.length > 0) candidates.push(nums);
+  }
+
+  if(candidates.length === 0) return [];
+
+  candidates.sort((a, b) => {
+    const score = arr => arr.reduce((sum, v) => sum + Math.abs(v), 0);
+    return score(b) - score(a);
+  });
+
+  return candidates[0];
+}
+
+function tokensAfter(text, label, lookahead){
+  const idx = text.lastIndexOf(label);
+  if(idx < 0) return [];
+  const after = text.substring(idx + label.length, idx + label.length + lookahead).trim();
+  const tokens = after.split(/\s+/);
+  const nums = [];
+  for(const t of tokens){
+    if(/^-?[\d,]+(\.\d+)?$/.test(t)) nums.push(cn(t));
+    else if(nums.length) break;
+  }
+  return nums;
+}
+
+function p1AccumActual(label){
+  const afterNums = tokensAfter(p1, label, 260);
+  const beforeNums = tokensBefore(p1, label, 300);
+
+  if((label === '建築及設備計畫' || label === '購建固定資產')
+     && afterNums.length === 7
+     && afterNums[0] === afterNums[1]
+     && afterNums[0] === afterNums[4]
+     && afterNums[2] === -afterNums[4]
+     && afterNums[5] === -afterNums[4]){
+    return 0;
+  }
+
+  // 期末基金餘額特殊處理
+  if(label === '期末基金餘額'){
+    const afterRow = rowNumbersAfterLabel(label);
+
+    // 策略一：正向算術三元組（期初 + 本月淨增減 = 期末累計）
+    // 嘗試 afterNums（需 label 連續）與 afterRow（支援 label 拆字）兩個 after 來源
+    for(const aft of [afterNums, afterRow]){
+      const combined = [...beforeNums.slice(-5), ...aft.slice(0, 4)];
+      const large = combined.filter(v => Math.abs(v) > 1000);
+      for(let i = 0; i + 2 < large.length; i++){
+        const a = large[i], b = large[i+1], c = large[i+2];
+        if(Math.abs(a + b - c) <= 1 && a > 0 && c > 0) return c;
+      }
+    }
+
+    // 策略二：前方無數字（解繳公庫阻斷 or label 被拆字）
+    // 後方格式 [本月實際, 累計實際, 本月預算, ...] → 索引 1 = 累計實際
+    const aftB = afterRow.length >= 2 ? afterRow : afterNums;
+    if(beforeNums.length === 0 && aftB.length >= 2) return aftB[1];
+
+    // 策略二-B：後方完全無數字，所有欄位都在 label 之前
+    // 格式：[累計差, 法定預算, 累計實際, 累計預算, 累計%] 期末基金餘額
+    // 民雄 115/2 實例：[46091207, 1370701, 52173908, 6082701, 758]
+    // 算術確認：累計實際(index 2) - 累計預算(index 3) = 累計差(index 0)
+    if(afterNums.length === 0 && afterRow.length === 0 && beforeNums.length === 5){
+      if(Math.abs(beforeNums[2] - beforeNums[3] - beforeNums[0]) <= 1) return beforeNums[2];
+    }
+
+    // 策略三：pctIdx 法（beforeNums 有完整欄位數字時）
+    // 竹崎高中格式：[解繳公庫額, 累計實際, 本月預算, 累計預算, 累計%]
+    // 此格式無 ≤100 值 → pctIdx=-1 → beforeNums[length-4] = index 1 = 累計實際
+    // 正常 9-token 格式：pctIdx=月% → 下一個 = 累計實際
+    if(beforeNums.length >= 5){
+      const pctIdx = beforeNums.findIndex(v => Math.abs(v) <= 100);
+      if(pctIdx >= 0 && pctIdx + 1 < beforeNums.length) return beforeNums[pctIdx + 1];
+      return beforeNums[beforeNums.length - 4];
+    }
+
+    // 策略四：後方只有 1 個數字 = 累計實際
+    if(afterRow.length === 1) return afterRow[0];
+    if(afterNums.length === 1) return afterNums[0];
+
+    // 策略五：beforeNums 三元組驗證（數字全在前方的格式）
+    if(beforeNums.length >= 3
+       && Math.abs(beforeNums[0] + beforeNums[1] - beforeNums[2]) <= 1)
+      return beforeNums[2];
+
+    return null;
+  }
+
+  // 主要路徑：用 tokensBefore，透過「%型態值」定位累計實際數欄位
+  // 累計實際數 = 第一個 |v|≤100 的元素（月執行率）之後的那個數字
+  if(beforeNums.length >= 5 && label !== '建築及設備計畫' && label !== '購建固定資產'){
+    const pctIdx = beforeNums.findIndex(v => Math.abs(v) <= 100);
+    if(pctIdx >= 0 && pctIdx + 1 < beforeNums.length){
+      return beforeNums[pctIdx + 1];
+    }
+    return beforeNums[beforeNums.length - 4];
+  }
+
+  // 備用：tokensAfter（tokensBefore 找不到時才用）
+  if(afterNums.length >= 9) return afterNums[5];
+  if(afterNums.length === 7){
+    // 判斷兩種 7-element 格式：
+    // 格式A（本月實際在首）：[本月實, 本月預, 累計實, 累計預, 累計差, 累計%, 法定預算]
+    //   → 累計實 - 累計預 = 累計差 → index 2
+    // 格式B（法定預算在首）：[法定預, 本月實, 本月預, 累計實, 累計預, 累計差, 累計%]
+    //   → index 3
+    if(Math.abs(afterNums[2] - afterNums[3] - afterNums[4]) <= 1) return afterNums[2];
+    return afterNums[3];
+  }
+  // 5-token 格式（無本月欄位）：[法定預算, 累計實際, 累計預算, 差額, 差額%]
+  if((label === '建築及設備計畫' || label === '購建固定資產') && afterNums.length >= 4) return afterNums[1];
+
+  if(label === '建築及設備計畫' || label === '購建固定資產') return 0;
+  return 0;
+}
+  const 基金來源累計 = p1AccumActual('基金來源');
+  const 基金用途累計 = p1AccumActual('基金用途');
+  const 期末基金餘額 = p1AccumActual('期末基金餘額');
+  const 基金來源本月 = (()=>{
+    const nums = tokensBefore(p1, '基金來源', 300);
+    if(nums.length >= 2) return nums[1];
+    return null;
+  })();
+  const 基金用途本月 = (()=>{
+    const nums = tokensBefore(p1, '基金用途', 300);
+    if(nums.length >= 2) return nums[1];
+    return null;
+  })();
+
+  // 資本門：國民教育計畫下若有「購建固定資產」即為錯誤出帳
+  // 子科目格式（4 個 token，無比較增減欄）：[本月實][本月預][累計實][累計預]
+  // 累計實際 = 倒數第 2 個 token
+  let 國民教育下購建固定累計 = 0;
+  const 國教idx = p1.indexOf('國民教育計畫');
+  const 建設idx = p1.indexOf('建築及設備計畫');
+  if(國教idx >= 0){
+    const endIdx = 建設idx > 國教idx ? 建設idx : p1.length;
+    const segment = p1.substring(國教idx, endIdx);
+    const purIdx = segment.indexOf('購建固定資產');
+    if(purIdx >= 0){
+      const before = segment.substring(Math.max(0, purIdx-100), purIdx).trim();
+      const tokens = before.split(/\s+/);
+      const nums = [];
+      for(let i=tokens.length-1; i>=0; i--){
+        if(/^-?[\d,]+(\.\d+)?$/.test(tokens[i])) nums.unshift(cn(tokens[i]));
+        else break;
+      }
+      if(nums.length >= 3) 國民教育下購建固定累計 = nums[nums.length-2] || 0;
+    }
+  }
+
+  // 建築及設備計畫累計實際數（同 P1 主科目策略）
+  let 建築設備計畫累計 = 0;
+  if(建設idx >= 0){
+    建築設備計畫累計 = p1AccumActual('建築及設備計畫') || 0;
+  }
+
+  // ══ P2 平衡表 ═══════════════════════════════════════════════
+  // pdf.js 輸出格式變化大：有時科目在數字前，有時在數字後
+  const 平衡表合計       = (()=>{const m=p2.match(/合計：\s*([\d,]+)/); return m?cn(m[1]):null;})();
+  const 資產合計         = 平衡表合計;  // 資產合計 = 平衡表合計
+  const 負債合計         = (()=>{const m=p2.match(/負\s*債\s+2\s+([\d,]+)/); return m?cn(m[1]):null;})();
+  // 淨資產有兩種格式：
+  //   "淨資產 3 92.15 197,982,216" （%在前金額在後）
+  //   "淨資產 3101 197,982,216 92.15" （金額在前%在後，但這是子細目）
+  // 主科目「淨資產 3」優先匹配第一種，fallback 第二種
+  const 淨資產合計 = (()=>{
+    let m = p2.match(/淨資產\s+3\s+[\d.]+\s+([\d,]+)/);
+    if(m) return cn(m[1]);
+    m = p2.match(/淨資產\s+3\s+([\d,]+)\s+[\d.]+/);
+    return m ? cn(m[1]) : null;
+  })();
+  const 縣庫存款         = (()=>{const m=p2.match(/銀行存款-縣庫存款\s+\S+\s+([\d,]+)/); return m?cn(m[1]):null;})();
+  const 保管款專戶       = (()=>{const m=p2.match(/銀行存款-保管款專\s*\S*\s+[\d-]+\s+([\d,]+)/); return m?cn(m[1]):0;})();
+  const 應付代收款       = (()=>{const m=p2.match(/應付代收款\s+\S+\s+([\d,]+)/); return m?cn(m[1]):0;})();
+  const 存入保證金       = (()=>{const m=p2.match(/存入保證金\s+\S+\s+([\d,]+)/); return m?cn(m[1]):0;})();
+  const 預付費用非預算類 = (()=>{const m=p2.match(/預付費用-非預算類\s+\S+\s+([\d,]+)/); return m?cn(m[1]):0;})();
+  const 預付費用         = (()=>{const m=p2.match(/預付費用\s+110804\s+([\d,]+)/); return m?cn(m[1]):0;})();
+  // 固定資產有兩種格式：
+  //   "固定資產 14 136,590,842 75.15" 或 "固定資產 136,590,842 75.15 14"（編號位置不同）
+  const 固定資產 = (()=>{
+    let m = p2.match(/固定資產\s+([\d,]+)\s+[\d.]+\s+14/);
+    if(m) return cn(m[1]);
+    m = p2.match(/固定資產\s+14\s+([\d,]+)/);
+    return m ? cn(m[1]) : null;
+  })();
+  const 零用週轉金 = (()=>{const m=p2.match(/零用及週轉金\s+\S+\s+([\d,]+)/); return m?cn(m[1]):0;})();
+  const 預付費用預算類 = (()=>{const m=p2.match(/預付費用-預算類\s+\S+\s+([\d,]+)/); return m?cn(m[1]):0;})();
+  const 暫收待結轉 = (()=>{const m=p2.match(/暫收及待結轉帳項\s+\S+\s+([\d,]+)/); return m?cn(m[1]):0;})();
+
+  // ══ P4 收入支出表 ══════════════════════════════════════════
+  // 格式："科目 本月數 累計數"；有時只有累計數
+  function p4Pair(label){
+    const m = p4.match(new RegExp(label+'\\s+(-?[\\d,]+)(?:\\s+(-?[\\d,]+))?'));
+    if(!m) return [null, null];
+    return [cn(m[1]), m[2] ? cn(m[2]) : null];
+  }
+  const [收入本月, 收入累計0] = p4Pair('收入');
+  const 收入累計           = 收入累計0 !== null ? 收入累計0 : 收入本月;
+  const [支出本月, 支出累計0] = p4Pair('支出');
+  const 支出累計           = 支出累計0 !== null ? 支出累計0 : 支出本月;
+  const [期初淨資產收支]   = p4Pair('期初淨資產');
+  const [期末淨資產收支]   = p4Pair('期末淨資產');
+  const [財產交易損失本月] = p4Pair('財產交易損失');
+  const 財產交易損失本月_safe = 財產交易損失本月 || 0;
+  const [折舊本月]         = p4Pair('固定資產折舊');
+  const 折舊本月_safe = 折舊本月 || 0;
+  const [淨資產調整數本月, 淨資產調整數累計0] = p4Pair('淨資產調整數');
+  // 期末淨資產勾稽需用累計數；若只有本月數（單欄格式）則以本月數代替
+  const 淨資產調整數收支 = (淨資產調整數累計0 !== null ? 淨資產調整數累計0 : 淨資產調整數本月) || 0;
+  const 淨資產調整數收支_safe = 淨資產調整數收支;
+  const [受贈收入本月] = p4Pair('受贈收入');
+  const [雜項收入本月] = p4Pair('雜項收入');
+
+  // ══ P5 主要業務計畫 ════════════════════════════════════════
+  function p5Cumulative(label){
+    const m = p5.match(new RegExp(label+'\\s+累計數\\s+(-?[\\d,]+)'));
+    return m ? cn(m[1]) : null;
+  }
+  const 國民教育累計       = p5Cumulative('國民教育計畫');
+  const 高中職教育累計     = p5Cumulative('高中及高職教育計畫') || 0;
+  const 建築設備計畫執明累計 = p5Cumulative('建築及設備計畫') || 0;
+
+  // ══ P6 資本資產明細表 ══════════════════════════════════════
+  // 格式："資產 期初成本 累計折舊 增加 [減少可省略] 折舊變動 期末帳面金額"
+  // 期末帳面金額固定在最右欄，取「資產」行所有數字的最後一個
+  const 資本資產期末 = (()=>{
+    const m = p6.match(/資產((?:\s+[\d,]+)+)/);
+    if(!m) return null;
+    const nums = m[1].trim().split(/\s+/).map(cn).filter(v=>v!==null);
+    return nums.length > 0 ? nums[nums.length - 1] : null;
+  })();
+
+  // ══ P9+10 固建表總計 ═════════════════════════════════════════
+  // 格式："法定預算 調整 累計分配 實支數 累計合計 |差額| 合計% 差%" + 「總 計」
+  // 實支數 = 大正數陣列的 index 3
+  let 固建表實支數 = 0;
+  const 總計idx = p910.lastIndexOf('總');
+  if(總計idx >= 0){
+    const before = p910.substring(Math.max(0, 總計idx-200), 總計idx);
+    const tokens = before.split(/\s+/).filter(Boolean);
+    const nums = [];
+    for(let i=tokens.length-1; i>=0; i--){
+      if(/^-?[\d,]+(\.\d+)?$/.test(tokens[i])) nums.unshift(tokens[i]);
+      else break;
+    }
+    const big = nums.map(cn).filter(v=>v!==null && v>=1000);
+    if(big.length >= 4) 固建表實支數 = big[3];
+  }
+
+  // ══ P11+12 各項費用彙計表 ══════════════════════════════════
+  // 合計行有 4 欄：[預算, 執行, 差, 差%]
+  //   4月格式：「合 計 預算 執行 差 差%」 數字在後
+  //   9月格式：「預算 執行 差 差% 合 計」 數字在前
+  const 費用彙計合計 = (()=>{
+    let m = p1112.match(/合\s*計\s+([\d,]+)\s+([\d,]+)/);
+    if(m) return cn(m[2]);
+    // fallback: 取「合 計」前 tokens 的最後4個（合計行的4個欄位）
+    const allBefore = tokensBefore(p1112, '合   計', 200);
+    const lastFour = allBefore.slice(-4);
+    if(lastFour.length === 4) return lastFour[1];
+    return null;
+  })();
+  // 費用表購建固定資產（第51目）執行數
+  const 費用表購建固定執行 = (()=>{
+    // PDF 文字項目可能在科目名稱中插入空白；保留科目碼與數字欄位界線。
+    const m = p1112.match(/(?:^|\s)51\s+購\s*建\s*固\s*定\s*資\s*產\s+([\d,]+)\s+([\d,]+)/);
+    return m ? cn(m[2]) : null;
+  })();
+
+  // ══ P13 預算執行對照表 ═════════════════════════════════════
+  // 格式：「科目名 預算執行 調整數 會計收支 會計科目」
+  const 預算執行基金來源 = (()=>{const m=p13.match(/基金來源\s+([\d,]+)/); return m?cn(m[1]):null;})();
+  const 預算執行基金用途 = (()=>{const m=p13.match(/基金用途\s+([\d,]+)/); return m?cn(m[1]):null;})();
+  // 期末基金餘額行格式特殊：「期末基金餘額 期末淨資產 X Y Z」或反過來
+  // 取「期末基金餘額」之後（中間可能有「期末淨資產」標籤）的 3 個連續數字
+  // 第1個=期末基金預算執行；第3個=期末淨資產
+  const 預算執行末 = (()=>{
+    const m = p13.match(/期末基金餘額[^0-9-]*?([-\d,]+)\s+([-\d,]+)\s+([-\d,]+)/);
+    if(m) return [cn(m[1]), cn(m[3])];
+    return [null, null];
+  })();
+  const 預算執行期末基金   = 預算執行末[0];
+  const 預算執行期末淨資產 = 預算執行末[1];
+  const 預算執行期初淨資產 = (()=>{
+    const m = p13.match(/期初淨資產\s+([-\d,]+)/);
+    return m ? cn(m[1]) : null;
+  })();
+
+  // ══ P14 銀行存款調節表 ══════════════════════════════════════
+  const n14 = [...p14.matchAll(/([\d,]{7,})/g)].map(m=>cn(m[1])).filter(v=>v!==null);
+  const 調節平衡表 = n14[0] || null;
+  const 調節對帳單 = n14[1] || null;
+  const 調節差額   = (調節平衡表!=null && 調節對帳單!=null) ? 調節平衡表-調節對帳單 : null;
+
+  // ══ 報告期間 ══════════════════════════════════════════════
+  const per  = p1.match(/中華民國\s*(\d+)\s*年\s*(\d+)\s*月/);
+  const periodStr = per ? `${per[1]}年${per[2]}月份` : '—';
+  const inst = (p1.match(/嘉義縣[^\s─－—]+(?:小學|中學|高中|高職)/)||[])[0]||'';
+
+  return{
+    periodStr, inst, reportPeriods:inspectReportPeriods(pages),
+    基金來源累計, 基金用途累計, 基金來源本月, 基金用途本月, 期末基金餘額,
+    國民教育下購建固定累計, 建築設備計畫累計,
+    資產合計, 負債合計, 淨資產合計,
+    縣庫存款, 保管款專戶, 應付代收款, 存入保證金,
+    預付費用非預算類, 預付費用, 預付費用預算類, 暫收待結轉,
+    固定資產, 平衡表合計, 零用週轉金,
+    收入累計, 支出累計, 期初淨資產收支, 期末淨資產收支,
+    財產交易損失本月: 財產交易損失本月_safe,
+    折舊本月: 折舊本月_safe,
+    淨資產調整數收支: 淨資產調整數收支_safe,
+    淨資產調整數本月: 淨資產調整數本月,
+    受贈收入本月: 受贈收入本月,
+    雜項收入本月: 雜項收入本月,
+    國民教育累計, 高中職教育累計, 建築設備計畫執明累計,
+    資本資產期末, 固建表實支數, 費用彙計合計,
+    費用表購建固定: 費用表購建固定執行,
+    預算執行基金來源, 預算執行基金用途, 預算執行期末基金,
+    預算執行期末淨資產, 預算執行期初淨資產,
+    調節平衡表, 調節對帳單, 調節差額
+  };
+}
+
+// ── 勾稽邏輯 ─────────────────────────────────────────────────
+function buildChecks(d, pettyCash){
+  return [
+    periodChecks(d.reportPeriods),
+    // ════ 一 ════════════════════════════════════════════════
+    {
+      sec:'一、基金來源用途餘絀表 vs 各項費用彙計表',
+      items:[
+        // 主要勾稽
+        {type:'auto',
+         name:'基金用途（累計實際數）= 各項費用彙計表合計',
+         a:d.基金用途累計, al:'基金用途累計實際數',
+         b:d.費用彙計合計, bl:'各項費用彙計表合計'},
+        // 問題1修正：從基金來源用途餘絀表直接判斷資本門是否錯誤出帳
+        {type:'capital_check',
+         name:'資本門確認：國民教育計畫下是否有購建固定資產出帳（應為零）',
+         val: d.國民教育下購建固定累計,
+         hint: d.國民教育下購建固定累計 > 0
+           ? `⚠️ 警告：基金來源用途餘絀表中，國民教育計畫下有購建固定資產累計 <span class="val hi">${fmt(d.國民教育下購建固定累計)}</span> 元，此為錯誤出帳，應改以「建築及設備計畫」出帳。`
+           : `✓ 國民教育計畫下無購建固定資產出帳，資本門出帳正確。`},
+      ]
+    },
+
+    // ════ 二 ════════════════════════════════════════════════
+    {
+      sec:'二、基金來源用途餘絀表 vs 主要業務計畫執行明細表',
+      items:[
+        // 分別抓各計畫（國小用國民教育計畫，高中用高中及高職教育計畫）
+        (()=>{
+          const 有國教 = d.國民教育累計 != null;
+          const 有高中職 = d.高中職教育累計 > 0;
+          const 主計畫名 = 有國教 ? '國民教育計畫' : '高中及高職教育計畫';
+          const 主計畫值 = 有國教 ? (d.國民教育累計||0) : (d.高中職教育累計||0);
+          return {type:'auto',
+            name:`基金用途（累計）= ${主計畫名}累計 + 建築及設備計畫累計`,
+            a:d.基金用途累計, al:'基金用途累計實際數',
+            b: 主計畫值 + (d.建築設備計畫執明累計||0),
+            bl:`${主計畫名}(${fmt(主計畫值)}) + 建築設備(${fmt(d.建築設備計畫執明累計)})`};
+        })(),
+      ]
+    },
+
+    // ════ 三 ════════════════════════════════════════════════
+    {
+      sec:'三、基金來源用途餘絀表 vs 固建表 vs 主要業務計畫（購建固定資產三表勾稽）',
+      items:[
+        // 三a：基金來源用途表-建築及設備計畫累計 vs 固建表實支數
+        // 注意：P1行若無本月實際數（無執行），系統不輸出累計實際欄，需判斷是否跳過
+        (()=>{
+          const p1有累計 = d.建築設備計畫累計 > 0;
+          const 固建有執行 = d.固建表實支數 != null && d.固建表實支數 > 0;
+          if(!p1有累計 && !固建有執行){
+            // 兩者皆為0/空，視為相符（無執行）
+            return {type:'auto',
+              name:'基金來源用途表-建築及設備計畫累計實際數 = 固建表總計累計實支數（均無執行）',
+              a:0, al:'建築及設備計畫累計', b:0, bl:'固建表實支數'};
+          } else if(p1有累計 || 固建有執行){
+            return {type:'auto',
+              name:'基金來源用途表-建築及設備計畫累計實際數 = 固建表總計累計實支數',
+              a: d.建築設備計畫累計||0, al:`基金來源用途表-建築及設備計畫累計(${fmt(d.建築設備計畫累計)})`,
+              b: d.固建表實支數, bl:`固建表總計累計實支數(${fmt(d.固建表實支數)})`};
+          }
+          return {type:'auto', name:'建築及設備計畫累計 vs 固建表', a:d.建築設備計畫累計, al:'P1', b:d.固建表實支數, bl:'固建表'};
+        })(),
+        // 三b：費用彙計表購建固定資產 = 固建表總計累計實支數
+        {type:'auto',
+         name:'各項費用彙計表-購建固定資產 = 固建表總計累計實支數',
+         a: d.費用表購建固定 != null ? d.費用表購建固定 : (d.固建表實支數 === 0 ? 0 : null),
+         al:'費用彙計表-購建固定資產',
+         b: d.固建表實支數,
+         bl:'固建表總計累計實支數'},
+      ]
+    },
+
+    // ════ 四 ════════════════════════════════════════════════
+    {
+      sec:'四、基金來源用途餘絀表 vs 預算執行與會計收支對照表',
+      items:[
+        // 問題5修正
+        {type:'auto',
+         name:'基金來源（累計）= 預算執行對照表-基金來源預算執行數',
+         a:d.基金來源累計, al:'基金來源累計實際數',
+         b:d.預算執行基金來源, bl:'預算執行對照表-基金來源'},
+        {type:'auto',
+         name:'基金用途（累計）= 預算執行對照表-基金用途預算執行數',
+         a:d.基金用途累計, al:'基金用途累計實際數',
+         b:d.預算執行基金用途, bl:'預算執行對照表-基金用途'},
+        {type:'auto',
+         name:'期末基金餘額 一致（基金來源用途表 = 預算執行對照表）',
+         a:d.期末基金餘額, al:'基金來源用途表-期末基金餘額',
+         b:d.預算執行期末基金, bl:'預算執行對照表-期末基金餘額'},
+      ]
+    },
+
+    // ════ 五 ════════════════════════════════════════════════
+    {
+      sec:'五、平衡表自身勾稽',
+      items:[
+        // 問題6修正：淨資產正確讀取
+        {type:'auto',
+         name:'資產合計 = 負債合計 + 淨資產合計',
+         a:d.資產合計, al:'資產合計',
+         b:(d.負債合計||0)+(d.淨資產合計||0),
+         bl:`負債(${fmt(d.負債合計)}) + 淨資產(${fmt(d.淨資產合計)})`},
+        {type:'auto',
+         name:'平衡表借貸平衡（資產合計 = 合計欄）',
+         a:d.資產合計, al:'資產合計',
+         b:d.平衡表合計, bl:'平衡表合計欄'},
+      ]
+    },
+
+    // ════ 六 ════════════════════════════════════════════════
+    {
+      sec:'六、銀行存款 — 縣庫存款勾稽',
+      items:[
+        // 問題8修正：只保留一個調節表勾稽（縣庫存款 = 支付科對帳單）
+        {type:'auto',
+         name:'銀行存款-縣庫存款 = 支付科對帳單餘額（調節表差額應為零）',
+         a:d.縣庫存款, al:'平衡表-縣庫存款',
+         b:d.調節對帳單, bl:'支付科對帳單餘額',
+         note:d.調節差額!=null&&d.調節差額!==0
+           ?`差額 ${fmt(d.調節差額)} 元，需填差額解釋表，留意未兌現支票期限`:null},
+        // 縣庫存款 + 零用金 + 預付費用-預算類 = 期末基金餘額
+        {type:'petty_cash_check',
+         name:'縣庫存款 + 零用金額度 + 預付費用-預算類 = 期末基金餘額',
+         縣庫存款: d.縣庫存款,
+         期末基金餘額: d.期末基金餘額,
+         零用金: pettyCash,
+         預付費用預算類: d.預付費用預算類},
+      ]
+    },
+
+    // ════ 七 ════════════════════════════════════════════════
+    {
+      sec:'七、固定資產科目 — 平衡表 vs 資本資產明細表',
+      items:[
+        // 問題9修正：正確讀取資本資產期末
+        {type:'auto',
+         name:'平衡表-固定資產 = 資本資產明細表-期末帳面金額合計',
+         a:d.固定資產, al:'平衡表-固定資產',
+         b:d.資本資產期末, bl:'資本資產明細表合計'},
+        {type:'manual',
+         name:'財產增減結存表 vs 資本資產明細表已核對',
+         hint:'核對每月財產報表時一併做帳務處理，確認資本資產明細表 = 財產增減結存表。<b>此項需目視確認。</b>'},
+        {type:'manual',
+         name:'折舊傳票已過帳、補登未登帳項目及折舊已完成',
+         hint:'確認本月折舊傳票已開立過帳，未登帳項目已補登。<b>此項需目視確認。</b>'},
+        // 問題9 補充：固定資產異動 vs 收入支出表本月數參考欄
+        {type:'asset_change',
+         name:'固定資產異動確認（報廢/撥出/撥入/受贈/重估）',
+         財產交易損失本月: d.財產交易損失本月,
+         折舊本月: d.折舊本月,
+         淨資產調整數本月: d.淨資產調整數本月,
+         受贈收入本月: d.受贈收入本月,
+         雜項收入本月: d.雜項收入本月},
+      ]
+    },
+
+    // ════ 八 ════════════════════════════════════════════════
+    {
+      sec:'八、負債項目勾稽',
+      items:[
+        // 保管款專戶（資產）= 應付代收款 + 存入保證金 - 預付費用-非預算類 + 暫收及待結轉帳項
+        (()=>{
+          const 有非預算 = (d.預付費用非預算類||0) > 0;
+          const 有暫收 = (d.暫收待結轉||0) > 0;
+          let name = '銀行存款-保管款專戶 = 應付代收款 + 存入保證金';
+          if(有非預算) name += ' - 預付費用-非預算類';
+          if(有暫收) name += ' + 暫收及待結轉帳項';
+          let bl = `應付代收款(${fmt(d.應付代收款)}) + 存入保證金(${fmt(d.存入保證金)})`;
+          if(有非預算) bl += ` - 預付費用-非預算類(${fmt(d.預付費用非預算類)})`;
+          if(有暫收) bl += ` + 暫收及待結轉(${fmt(d.暫收待結轉)})`;
+          return {type:'auto', name,
+            a: d.保管款專戶,
+            al:`保管款專戶(${fmt(d.保管款專戶)})`,
+            b: (d.應付代收款||0)+(d.存入保證金||0)-(d.預付費用非預算類||0)+(d.暫收待結轉||0),
+            bl};
+        })(),
+        // 預付費用-非預算類若有餘額，人工確認
+        {type:'manual',
+         name:'預付費用-非預算類 留意辦理狀況',
+         hint: (d.預付費用非預算類||0) > 0
+           ? `預付費用-非預算類餘額 <b class="val hi">${fmt(d.預付費用非預算類)}</b> 元，請留意後續清理狀況。`
+           : '預付費用-非預算類餘額為 0，無需特別留意。'},
+      ]
+    },
+
+    // ════ 九 ════════════════════════════════════════════════
+    {
+      sec:'九、淨資產 — 收入支出表 vs 預算執行與會計收支對照表',
+      items:[
+        // 問題10修正：淨資產合計正確讀取
+        {type:'auto',
+         name:'期末淨資產 一致（平衡表 = 預算執行對照表）',
+         a:d.淨資產合計, al:'平衡表-淨資產合計',
+         b:d.預算執行期末淨資產, bl:'預算執行對照表-期末淨資產'},
+        {type:'auto',
+         name:'期末淨資產 = 期初淨資產 + 累計收入 - 累計支出 + 淨資產調整數',
+         a:d.期末淨資產收支, al:'收入支出表-期末淨資產',
+         b:(d.期初淨資產收支!=null&&d.收入累計!=null&&d.支出累計!=null)
+           ?d.期初淨資產收支+d.收入累計-d.支出累計+d.淨資產調整數收支:null,
+         bl:`期初(${fmt(d.期初淨資產收支)}) + 收入(${fmt(d.收入累計)}) - 支出(${fmt(d.支出累計)}) + 調整數(${fmt(d.淨資產調整數收支)})`},
+      ]
+    },
+
+    // ════ 十 ════════════════════════════════════════════════
+    {
+      sec:'十、人工確認項目（需目視檢查）',
+      items:[
+        {type:'manual', name:'差額解釋表：未兌現支票期限確認',
+         hint:'查看差額解釋表中未兌現支票，接近到期者需聯絡縣府。<b>此項需目視確認。</b>'},
+        {type:'manual', name:'主計處保管款差額解釋表單已填報，信箱自有財源檔案已下載對帳',
+         hint:'查填主計處差額解釋表單；主計處寄送之自有財源 Excel 檔案，與基金來源、用途及餘絀表對帳。<b>此項需目視確認。</b>'},
+        {type:'manual', name:'附註揭露項目：對帳單核對完成',
+         hint:'附註揭露項目所列對帳單已逐一核對。<b>此項需目視確認。</b>'},
+        {type:'manual', name:'會計簿籍-平衡表科目明細表：子目有無負項',
+         hint:'檢查教育儲蓄專戶、午餐費、聯邦代收等對應專戶子目餘額，確認無異常負數。<b>此項需目視確認。</b>'},
+        {type:'manual',
+         name:'預付費用餘額留意辦理狀況',
+         hint: d.預付費用 > 0
+           ? `平衡表預付費用餘額 <span class="val hi">${fmt(d.預付費用)}</span> 元，請確認辦理狀況或帳務有無做錯。<b>有餘額時須特別留意。</b>`
+           : '預付費用餘額為 0，無需特別留意。'},
+        {type:'manual', name:'勾稽完成，月報檔上傳財報資訊網',
+          hint:'<a href="https://accrep.cyc.edu.tw/" target="_blank">👉 點此前往財報資訊網</a>'},
+      ]
+    },
+  ];
+}
+
+// ── 計算狀態 ─────────────────────────────────────────────────
+function runChecks(d, pettyCash){
+  return buildChecks(d, pettyCash).map(sec=>({
+    ...sec,
+    items: sec.items.map(item=>{
+      if(['manual','capital_check','petty_cash_check','asset_change'].includes(item.type))
+        return{...item, st:item.type};
+      if(item.a==null||item.b==null) return{...item, st:'skip', diff:null};
+      const diff=item.a-item.b;
+      return{...item, st:Math.abs(diff)===0?'pass':'fail', diff};
+    })
+  }));
+}
+
+// ── 渲染 ─────────────────────────────────────────────────────
+function renderAll(sections, d){
+  let totPass=0,totFail=0,totManual=0,totSkip=0;
+  sections.forEach(s=>s.items.forEach(i=>{
+    if(i.st==='pass')totPass++;
+    else if(i.st==='fail')totFail++;
+    else if(['manual','capital_check','petty_cash_check','asset_change'].includes(i.st))totManual++;
+    else if(i.st==='skip')totSkip++;
+  }));
+  rm.textContent=d.periodStr+(d.inst?'　'+d.inst:'');
+  rp.textContent='';
+  ch.innerHTML=`
+    <span class="chip cp">✓ 自動相符 ${totPass} 項</span>
+    ${totFail?`<span class="chip cf">✗ 差異 ${totFail} 項</span>`:''}
+    <span class="chip ci">☑ 人工確認 ${totManual} 項</span>
+    ${totSkip?`<span class="chip cs">— 資料不足 ${totSkip} 項</span>`:''}
+  `;
+  rc.innerHTML='';
+  sections.forEach((sec,si)=>{
+    const fails=sec.items.filter(i=>i.st==='fail').length;
+    // 資本門警告也算差異
+    const capitalWarn=sec.items.some(i=>i.st==='capital_check'&&i.val>0);
+    const passes=sec.items.filter(i=>i.st==='pass').length;
+    const autoItems=sec.items.filter(i=>i.st==='pass'||i.st==='fail'||i.st==='skip');
+    const badge = (fails>0||capitalWarn)
+      ? `<span class="chip cf">${fails+(capitalWarn?1:0)} 項差異</span>`
+      : passes===autoItems.length&&passes>0
+      ? `<span class="chip cp">自動相符</span>`
+      : `<span class="chip ci">含人工確認</span>`;
+    const block=document.createElement('div');
+    block.className='sec';
+    block.innerHTML=`<div class="sec-hdr"><span class="sec-num">${si+1}</span>${sec.sec.replace(/^[一二三四五六七八九十]+、/,'')}${badge}</div>${sec.items.map(rowH).join('')}`;
+    rc.appendChild(block);
+  });
+}
+
+function rowH(item){
+  if(item.type==='period'){
+    const status = item.st==='fail' ? '✗ 月份不符' : item.st==='pass' ? '✓ 相符' : '⚠ 無法確認';
+    const cls = item.st==='fail' ? 'bf' : item.st==='pass' ? 'bp' : 'bs';
+    const detail = item.st==='skip'
+      ? item.actualLabel+'；'+item.expectedLabel+'。請人工確認此頁表頭年月。'
+      : '本頁：'+item.actualLabel+'；應為：'+item.expectedLabel+'（依第 '+item.referencePage+' 頁基金來源用途餘絀表）';
+    return '<div class="row"><div><div class="row-name">'+item.name+'</div><div class="row-det">'+detail+'</div></div><span class="bdg '+cls+'">'+status+'</span></div>';
+  }
+
+  // ── 資本門自動判斷 ──
+  if(item.st==='capital_check'){
+    const isError = item.val > 0;
+    return`<div class="manual-row">
+      <div>
+        <div class="manual-name" style="color:${isError?'var(--fail)':'var(--pass)'}">${isError?'⚠ 錯誤出帳':'✓'} ${item.name}</div>
+        <div class="manual-hint">${item.hint}</div>
+      </div>
+      <span class="bdg ${isError?'bf':'bp'}">${isError?'錯誤':'正確'}</span>
+    </div>`;
+  }
+
+  // ── 零用金勾稽 ──
+  if(item.st==='petty_cash_check'){
+    const {縣庫存款, 期末基金餘額, 零用金, 預付費用預算類}=item;
+    const 預付 = 預付費用預算類 || 0;
+    const computed = 縣庫存款!=null ? 縣庫存款+零用金+預付 : null;
+    const match = computed!=null&&期末基金餘額!=null && computed===期末基金餘額;
+    const diff = computed!=null&&期末基金餘額!=null ? computed-期末基金餘額 : null;
+    return`<div class="row">
+      <div>
+        <div class="row-name">${item.name}</div>
+        <div class="row-det">
+          <span class="val">${fmt(縣庫存款)}</span>
+          <span style="color:var(--faint);margin:0 3px">+</span>
+          <span class="val">零用金 ${fmt(零用金)}</span>
+          ${預付>0?`<span style="color:var(--faint);margin:0 3px">+</span><span class="val">預付費用-預算類 ${fmt(預付)}</span>`:''}
+          <span style="color:var(--faint);margin:0 3px">=</span>
+          <span class="val">${fmt(computed)}</span>
+          <span style="color:var(--faint);margin:0 6px">vs</span>
+          <span class="val">期末基金餘額 ${fmt(期末基金餘額)}</span>
+        </div>
+        ${!match&&diff!=null?`<div class="diff">差額：${fmt(diff)} 元</div>`:''}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;min-width:80px">
+        <span class="bdg ${match?'bp':'bf'}">${match?'✓ 相符':'✗ 差異'}</span>
+      </div>
+    </div>`;
+  }
+
+  // ── 固定資產異動參考 ──
+  if(item.st==='asset_change'){
+    const {財產交易損失本月, 折舊本月, 淨資產調整數本月, 受贈收入本月, 雜項收入本月}=item;
+    const 淨調月 = 淨資產調整數本月;
+    const v = n => n != null ? `<span class="val">${fmt(n)}</span>` : `<span style="color:var(--faint)">─</span>`;
+    const tdC = 'padding:3px 8px;vertical-align:middle';
+    const tdR = tdC + ';text-align:right;white-space:nowrap';
+    const hr  = `<tr><td colspan="3" style="padding:0;border-top:1px dashed var(--border)"></td></tr>`;
+    return`<div class="manual-row">
+      <div style="flex:1">
+        <div class="manual-name">☐ ${item.name}</div>
+        <div class="manual-hint" style="margin-top:8px">
+          <div style="margin-bottom:6px;color:var(--faint)">對照 PDF 固定資產異動表，確認各類異動已入帳：</div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <tr style="border-bottom:1px solid var(--border2)">
+              <th style="${tdC};color:var(--faint);font-weight:600">財產變動原因（類型）</th>
+              <th style="${tdC};color:var(--faint);font-weight:600">會計報表適用科目</th>
+              <th style="${tdR};color:var(--faint);font-weight:600">收支表本月數</th>
+            </tr>
+            <tr>
+              <td style="${tdC}">報廢、贈與、毀損、遺失</td>
+              <td style="${tdC};color:var(--muted)">財產交易損失</td>
+              <td style="${tdR}">${v(財產交易損失本月)}</td>
+            </tr>
+            ${hr}
+            <tr>
+              <td style="${tdC}">撥出財產</td>
+              <td style="${tdC};color:var(--muted)" rowspan="3">淨資產調整數<br><span style="color:var(--faint);font-size:10px">(三者合計)</span></td>
+              <td style="${tdR}" rowspan="3">${v(淨調月)}</td>
+            </tr>
+            <tr><td style="${tdC}">撥入財產</td></tr>
+            <tr><td style="${tdC}">資產重估增值</td></tr>
+            ${hr}
+            <tr>
+              <td style="${tdC}">受贈、資產交換</td>
+              <td style="${tdC};color:var(--muted)">受贈收入</td>
+              <td style="${tdR}">${v(受贈收入本月)}</td>
+            </tr>
+            ${hr}
+            <tr>
+              <td style="${tdC}">預算外財產增加</td>
+              <td style="${tdC};color:var(--muted)">雜項收入</td>
+              <td style="${tdR}">${v(雜項收入本月)}</td>
+            </tr>
+            ${hr}
+            <tr style="color:var(--faint)">
+              <td style="${tdC}">折舊（另行確認）</td>
+              <td style="${tdC}">固定資產折舊</td>
+              <td style="${tdR}">${v(折舊本月)}</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      <div class="chkwrap"><input type="checkbox" class="chkbox" title="勾選代表已確認"></div>
+    </div>`;
+  }
+
+  // ── 人工確認 ──
+  if(item.st==='manual'){
+    return`<div class="manual-row">
+      <div style="flex:1">
+        <div class="manual-name">☐ ${item.name}</div>
+        ${item.hint?`<div class="manual-hint">${item.hint}</div>`:''}
+      </div>
+      <div class="chkwrap"><input type="checkbox" class="chkbox" title="勾選代表已確認"></div>
+    </div>`;
+  }
+
+  // ── 自動比對 ──
+  const badgeMap={pass:'<span class="bdg bp">✓ 相符</span>',fail:'<span class="bdg bf">✗ 差異</span>',skip:'<span class="bdg bs">— 略過</span>'};
+  const badge=badgeMap[item.st]||'';
+  const diffH=(item.st==='fail'&&item.diff!=null)?`<div class="diff">差額：${fmt(item.diff)} 元</div>`:'';
+  const noteH=item.note?`<div class="note">⚠ ${item.note}</div>`:'';
+  const det=item.st==='skip'
+    ?`<div class="row-det" style="color:var(--faint)">PDF 中未找到足夠數據</div>`
+    :`<div class="row-det">
+        <span class="val">${item.al}：${fmt(item.a)}</span>
+        <span style="color:var(--faint);margin:0 5px">vs</span>
+        <span class="val">${item.bl}：${fmt(item.b)}</span>
+        ${noteH}
+      </div>`;
+
+  return`<div class="row">
+    <div><div class="row-name">${item.name}</div>${det}${diffH}</div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;min-width:80px">${badge}</div>
+  </div>`;
+}
+
+// ── 主流程 ───────────────────────────────────────────────────
+async function run(){
+  if(!file)return;
+  const pettyCash = parseInt($('pettyCash').value)||0;
+  rb.disabled=true;pg.classList.add('on');res.classList.remove('on');em.classList.remove('on');plog.innerHTML='';
+  try{
+    sp(10,'讀取 PDF 檔案…');lg('載入 PDF');
+    const buf=await file.arrayBuffer();
+    sp(30,'擷取各頁文字…');lg('解析 PDF 文字');
+    const pages=await extractPages(buf);
+    lg(`共 ${Object.keys(pages).length} 頁`);
+    sp(55,'解析各表數字…');
+    const d=parseData(pages);
+    rw.textContent=JSON.stringify(d,null,2);
+    sp(75,'執行勾稽比對…');lg('執行勾稽邏輯');
+    const sections=runChecks(d, pettyCash);
+    sp(95,'產出報告…');
+    renderAll(sections,d);
+    sp(100,'完成');lg('完成，請確認差異及人工確認項目');
+    res.classList.add('on');
+  }catch(e){
+    em.textContent='⚠️ 發生錯誤：'+e.message+'\n\n請確認上傳的是嘉義縣地方教育發展基金月報 PDF。';
+    em.classList.add('on');sp(0,'發生錯誤');lg('錯誤：'+e.message);
+  }finally{rb.disabled=false;}
+}
+</script>
+</body>
+</html>
+
